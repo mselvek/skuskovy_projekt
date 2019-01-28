@@ -1,0 +1,99 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+Martin Selvek
+Na spracovanie som si vybral dáta o vplyve plazmou aktivovanej vody na rast klíèkov kukurice. Nakoµko tieto dáta e¹te len rastú, vymyslel som si ich v exceli spôsobom: (stredná hodnota)+Random(odchylka)-Random(odchylka). Pozitím dvoch rovnomerných random generatorov dostaneme rozlozenie tvaru strie¹ky, èo je prvý krok ku normálnemu rozdeleniu. 4 randomy by boli lep¹ie, ale dosta» od kukurice perfektné dáta nebude µahké tie¾, tak si vystaèíme s dvoma.
+
+##Import dát
+
+Vyu¾ijeme importer.
+
+```{R}
+library(readxl)
+url <- "https://github.com/mselvek/skuskovy_projekt/blob/master/kukurica_data.xlsx?raw=true"
+destfile <- "kukurica_data.xlsx"
+curl::curl_download(url, destfile)
+kukurica_data <- read_excel(destfile)
+View(kukurica_data)
+``` 
+
+##Znázornenie dát
+
+Na úvod boxploty podla odrody.
+
+```{R}
+library(tidyverse)
+ggplot(data = kukurica_data, mapping = aes(x = Odroda, y = Dlzka_korena, color= PAW)) +
+  geom_boxplot() +
+  geom_jitter()
+```
+
+Vidíme, ¾e hodnoty s pou¾itím PAW a bez pou¾itia PAW nam to hád¾e do toho isteho boxplotu, musíme ich preto oddeli». Zárovneò zmeníme PAW zo spojitej ¹kaly na faktor: 1 bola pou¾itá, 0 nebola pou¾itá.
+
+```{R}
+kukurica_data$Odroda = as.factor(kukurica_data$Odroda)
+kukurica_data$PAW = as.factor(kukurica_data$PAW)
+```
+```{R}
+ggplot(data = kukurica_data, mapping = aes(x = Odroda, y = Dlzka_korena, fill = PAW)) +
+  geom_boxplot() +
+  geom_jitter() +
+  facet_grid(.~PAW)
+```
+
+Podarilo sa nam oddeli» hodnoty s pou¾itím PAW od hodnot bez pou¾itia PAW, pre lep¹ie vzajomne porobanie by sme v¹ak chceli mat vedla seba hodnoty pre kazdu odrodu s a bez PAW. Tie¾ sa nam nepáèi, ¾e jitter mie¹a hodnoty s a bez PAW.
+
+```{R}
+library(RColorBrewer)
+ggplot(data = kukurica_data, mapping = aes(x = Odroda, y = Dlzka_korena, fill = PAW)) +
+  geom_boxplot() +
+ 
+  scale_fill_brewer(palette = "Accent")
+  
+```
+
+A e¹te vyrie¹i» komplikacie s jitterom, a prida» estetické prvky.
+
+```{R}
+library(RColorBrewer)
+ggplot(data = kukurica_data) +
+  scale_color_manual(values=c("blue","red"),labels=c("Not used","Used"))+
+  geom_boxplot( mapping = aes(x = PAW, y = Dlzka_korena, colour = PAW)) +
+  geom_jitter( mapping = aes(x = PAW, y = Dlzka_korena, colour =PAW ), width = 0.25) +
+  
+  facet_wrap(~Odroda)+
+  labs(x="Plasma activated water",y="Root lenght", title= "Efect of plasma activated water on root lenghts")
+  
+```
+
+Graf je podµa predstáv, mo¾eme vyhodnocova».
+
+##Vyhodnotenie
+
+Na porovnanie dvojfaktorového testu sa hodí t-¹tatistika. Pre istotu nepredpokladáme rovnos» variancii. Zároveò, hypotézu formulujeme jednostranne, teda na¹a nulová hypotéza hovorí, ¾e PAW nezvy¹uje dl¾ku koreòov. 
+
+```{r}
+t.test(Dlzka_korena~PAW,data=kukurica_data, alternative="less", var.equal=F,subset=c(Odroda=="Bielik"))
+t.test(Dlzka_korena~PAW,data=kukurica_data, alternative="less", var.equal=F,subset=c(Odroda=="Almansa"))
+```
+
+Pote¹ilo by nas, ak by variancie oboch skupin boli rovnake, lebo by sme mohli pouzi» "silnej¹i" t test (ak tomu spravne rozumiem). Rovnost variancií overuje F-test, ktorý v Rku nachadzame ako var.test
+
+```{r}
+var.test(Dlzka_korena ~ Odroda, data = kukurica_data, subset=c(PAW=="1"))
+var.test(Dlzka_korena ~ Odroda, data = kukurica_data, subset=c(PAW=="0"))
+```
+
+Vidíme, ¾e ak sa obmedzíme na jednotlivé subsety P hodnota je prili¹ vysoká, ostáva v platnosti nulová hypotéza, ¾e variancie sú rovnaké. Zopakujeme T test s rovnos»ou variancií.
+
+```{r}
+t.test(Dlzka_korena~PAW,data=kukurica_data, alternative="less", var.equal=T,subset=c(Odroda=="Bielik"))
+t.test(Dlzka_korena~PAW,data=kukurica_data, alternative="less", var.equal=T,subset=c(Odroda=="Almansa"))
+```
+
+P hodnota sa menila na 3 desatinnom mieste. Výstup teda hovorí to isté, èo prvá dvojica T testov. PAW má pozitívny efekt na odrodu Bielik, pri odrode Almansa nepozorujeme statisticky významný vplyv.
